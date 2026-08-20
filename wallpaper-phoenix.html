@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>TRICEPT Bildmarke — Wallpaper</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000039; }
+  #bg {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(60% 55% at 78% 22%, rgba(23,240,240,0.16), transparent 70%),
+      radial-gradient(55% 50% at 18% 82%, rgba(17,239,148,0.13), transparent 72%),
+      linear-gradient(135deg, #000039, #000c4a 55%, #001777);
+  }
+  canvas { position: fixed; inset: 0; display: block; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<script type="module">
+import * as THREE from 'three';
+
+const VB = 226.772, S = 1.7 / VB, C = VB / 2;
+const px = v => (v - C) * S, py = v => -(v - C) * S;
+
+const PATHS = [
+  ['segment-rechts', 'M224.603,190.215L149.657,59.211l-12.706,22.009c-7.253,12.564-7.253,28.044.001,40.608l53.026,92.696h20.528c12.475,0,20.293-13.481,14.098-24.309Z'],
+  ['segment-links', 'M83.625,132.212l54.044-94.002-10.182-17.789c-6.24-10.902-21.963-10.898-28.198.006L23.764,152.507h24.699c14.505,0,27.908-7.736,35.162-20.295Z'],
+  ['segment-basis', 'M119.024,173.199H12.141l-9.887,16.868c-6.347,10.828,1.462,24.457,14.014,24.457h150.048l-12.117-21.007c-7.251-12.572-20.663-20.318-35.176-20.318Z']
+];
+
+function pathToShape(d) {
+  const t = d.match(/[MmLlHhVvCcZz]|-?\d*\.?\d+(?:e[-+]?\d+)?/g);
+  const shape = new THREE.Shape();
+  let i = 0, cmd = '', x = 0, y = 0, sx = 0, sy = 0;
+  const n = () => parseFloat(t[i++]);
+  while (i < t.length) {
+    if (/[A-Za-z]/.test(t[i])) { cmd = t[i]; i++; }
+    switch (cmd) {
+      case 'M': x = n(); y = n(); sx = x; sy = y; shape.moveTo(px(x), py(y)); cmd = 'L'; break;
+      case 'L': x = n(); y = n(); shape.lineTo(px(x), py(y)); break;
+      case 'l': x += n(); y += n(); shape.lineTo(px(x), py(y)); break;
+      case 'H': x = n(); shape.lineTo(px(x), py(y)); break;
+      case 'h': x += n(); shape.lineTo(px(x), py(y)); break;
+      case 'V': y = n(); shape.lineTo(px(x), py(y)); break;
+      case 'v': y += n(); shape.lineTo(px(x), py(y)); break;
+      case 'C': { const a = n(), b = n(), c2 = n(), d2 = n(), e = n(), f = n(); shape.bezierCurveTo(px(a), py(b), px(c2), py(d2), px(e), py(f)); x = e; y = f; break; }
+      case 'c': { const a = x + n(), b = y + n(), c2 = x + n(), d2 = y + n(), e = x + n(), f = y + n(); shape.bezierCurveTo(px(a), py(b), px(c2), py(d2), px(e), py(f)); x = e; y = f; break; }
+      case 'Z': case 'z': shape.closePath(); x = sx; y = sy; break;
+      default: i++;
+    }
+  }
+  return shape;
+}
+
+function creaseNormals(geo, angleDeg = 45) {
+  const pos = geo.attributes.position.array;
+  const triCount = pos.length / 9;
+  const faceN = new Float32Array(triCount * 3);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c2 = new THREE.Vector3();
+  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let f = 0; f < triCount; f++) {
+    const o = f * 9;
+    a.fromArray(pos, o); b.fromArray(pos, o + 3); c2.fromArray(pos, o + 6);
+    ab.subVectors(b, a); ac.subVectors(c2, a);
+    n.crossVectors(ab, ac).normalize();
+    n.toArray(faceN, f * 3);
+  }
+  const map = new Map();
+  const key = (i) => Math.round(pos[i] * 4000) + '_' + Math.round(pos[i + 1] * 4000) + '_' + Math.round(pos[i + 2] * 4000);
+  for (let f = 0; f < triCount; f++) {
+    for (let v = 0; v < 3; v++) {
+      const k = key(f * 9 + v * 3);
+      let list = map.get(k);
+      if (!list) { list = []; map.set(k, list); }
+      list.push(f);
+    }
+  }
+  const limit = Math.cos(angleDeg * Math.PI / 180);
+  const out = new Float32Array(pos.length);
+  const own = new THREE.Vector3(), other = new THREE.Vector3(), acc = new THREE.Vector3();
+  for (let f = 0; f < triCount; f++) {
+    own.fromArray(faceN, f * 3);
+    for (let v = 0; v < 3; v++) {
+      const list = map.get(key(f * 9 + v * 3)) || [f];
+      acc.set(0, 0, 0);
+      for (const g of list) {
+        other.fromArray(faceN, g * 3);
+        if (other.dot(own) >= limit) acc.add(other);
+      }
+      if (acc.lengthSq() === 0) acc.copy(own);
+      acc.normalize().toArray(out, f * 9 + v * 3);
+    }
+  }
+  geo.setAttribute('normal', new THREE.BufferAttribute(out, 3));
+}
+
+function normalizedShape(d) {
+  const pts = pathToShape(d).getPoints(48);
+  if (THREE.ShapeUtils.isClockWise(pts)) pts.reverse();
+  return new THREE.Shape(pts);
+}
+
+const uniforms = { uTime: { value: 0 } };
+
+function gradientMaterial(name, axis, origin, length, phase, opts) {
+  const m = new THREE.MeshStandardMaterial(Object.assign({ name, color: '#ffffff' }, opts));
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uniforms.uTime;
+    sh.uniforms.uAxis = { value: axis };
+    sh.uniforms.uOrigin = { value: origin };
+    sh.uniforms.uLength = { value: length };
+    sh.uniforms.uPhase = { value: phase };
+    sh.vertexShader = 'varying vec3 vLocalPos;\n' + sh.vertexShader.replace(
+      '#include <begin_vertex>', '#include <begin_vertex>\n  vLocalPos = position;'
+    );
+    sh.fragmentShader = 'uniform float uTime;\nuniform vec2 uAxis;\nuniform vec2 uOrigin;\nuniform float uLength;\nuniform float uPhase;\nvarying vec3 vLocalPos;\n' + sh.fragmentShader.replace(
+      '#include <color_fragment>',
+      `#include <color_fragment>
+      vec3 cBlue = vec3(0.0033, 0.1086, 0.9559);
+      vec3 cCyan = vec3(0.0085, 0.871, 0.871);
+      vec3 cLime = vec3(0.0057, 0.863, 0.296);
+      float cT = dot(vLocalPos.xy - uOrigin, uAxis) / uLength;
+      float cG = fract(cT * 0.5 + uTime / 5.86 + uPhase);
+      float cTri = abs(cG * 2.0 - 1.0);
+      float cS = smoothstep(0.0, 1.0, cTri) * 2.0;
+      vec3 cGrad = cS < 1.0 ? mix(cLime, cCyan, cS) : mix(cCyan, cBlue, cS - 1.0);
+      diffuseColor.rgb *= cGrad * 0.35;`
+    ).replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+      vec3 eBlue = vec3(0.0033, 0.1086, 0.9559);
+      vec3 eCyan = vec3(0.0085, 0.871, 0.871);
+      vec3 eLime = vec3(0.0057, 0.863, 0.296);
+      float eT = dot(vLocalPos.xy - uOrigin, uAxis) / uLength;
+      float eG = fract(eT * 0.5 + uTime / 5.86 + uPhase);
+      float eTri = abs(eG * 2.0 - 1.0);
+      float eS = smoothstep(0.0, 1.0, eTri) * 2.0;
+      vec3 eGrad = eS < 1.0 ? mix(eLime, eCyan, eS) : mix(eCyan, eBlue, eS - 1.0);
+      totalEmissiveRadiance += eGrad * 0.7;`
+    );
+  };
+  return m;
+}
+
+// Verlaufsachse je Segment: entlang der eigenen Balkenrichtung, wie im Brand-Video
+const AXES = {
+  'segment-links':  { from: [99, 20],  to: [24, 152],  phase: 0.00 },
+  'segment-rechts': { from: [149, 59], to: [190, 214], phase: 0.33 },
+  'segment-basis':  { from: [12, 190], to: [170, 214], phase: 0.66 }
+};
+
+const mark = new THREE.Group();
+mark.name = 'tricept-bildmarke';
+for (const [name, d] of PATHS) {
+  const geo = new THREE.ExtrudeGeometry(pathToShape(d), {
+    depth: 0.26, bevelEnabled: true, bevelThickness: 0.005,
+    bevelSize: 0.0035, bevelSegments: 3, curveSegments: 96
+  });
+  creaseNormals(geo);
+  const a = AXES[name];
+  const p0 = new THREE.Vector2(px(a.from[0]), py(a.from[1]));
+  const p1 = new THREE.Vector2(px(a.to[0]), py(a.to[1]));
+  const dir = p1.clone().sub(p0);
+  const len = dir.length();
+  dir.normalize();
+  const face = gradientMaterial(name + '-gradient', dir, p0, len, a.phase, { roughness: 0.3, metalness: 0.18 });
+  const side = gradientMaterial(name + '-gradient-flanke', dir, p0, len, a.phase, { roughness: 0.5, metalness: 0.28 });
+  const mesh = new THREE.Mesh(geo, [face, side]);
+  mesh.name = name;
+  mark.add(mesh);
+}
+const b = new THREE.Box3().setFromObject(mark);
+const c = b.getCenter(new THREE.Vector3());
+mark.position.set(-c.x, -c.y, -c.z);
+
+const pivot = new THREE.Group();
+pivot.add(mark);
+
+const scene = new THREE.Scene();
+scene.add(pivot);
+scene.add(new THREE.HemisphereLight('#cfe6ff', '#001033', 0.85));
+const key = new THREE.DirectionalLight('#ffffff', 1.5);
+key.position.set(2.6, 3.4, 3.2);
+scene.add(key);
+const fill = new THREE.DirectionalLight('#17f0f0', 0.5);
+fill.position.set(-3, -1.2, 1.8);
+scene.add(fill);
+const rim = new THREE.DirectionalLight('#11ef94', 0.55);
+rim.position.set(-1.5, 2, -3);
+scene.add(rim);
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+camera.position.set(0, 0.15, 5.1);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearAlpha(0);
+renderer.toneMapping = THREE.NoToneMapping;
+document.body.appendChild(renderer.domElement);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.position.z = 5.1 * Math.max(1, 1.55 / camera.aspect);
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+const start = performance.now();
+function frame(now) {
+  const t = (now - start) / 1000;
+  uniforms.uTime.value = t;
+  pivot.rotation.y = Math.sin(t * 0.13) * 0.55;
+  pivot.rotation.x = Math.sin(t * 0.09) * 0.12;
+  pivot.rotation.z = Math.sin(t * 0.07) * 0.05;
+  pivot.position.y = Math.sin(t * 0.21) * 0.06;
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
