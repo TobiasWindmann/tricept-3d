@@ -21,7 +21,14 @@
 }
 </script>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000039; }
+  #bg {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(60% 55% at 78% 22%, rgba(23,240,240,0.16), transparent 70%),
+      radial-gradient(55% 50% at 18% 82%, rgba(17,239,148,0.13), transparent 72%),
+      linear-gradient(135deg, #000039, #000c4a 55%, #001777);
+  }
   canvas { position: fixed; inset: 0; display: block; }
 </style>
 </head>
